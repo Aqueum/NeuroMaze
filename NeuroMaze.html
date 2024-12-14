@@ -164,8 +164,10 @@ function makeMove(direction) {
     // Reached prize
     mazeCompleted = true;
     drawMazeView();
-    alert("You found the prize in " + moves + " moves!");
     logToCSV(userEmail, emailHash, moves, mazePath);
+    setTimeout(() => {
+      alert("You found the prize in " + moves + " moves!");
+    }, 50); // Give a small delay to let the image render before the alert
     if (moves < minimalMoves) {
       console.log("Email admin: Completed with minimal moves:", userEmail, emailHash);
     }
