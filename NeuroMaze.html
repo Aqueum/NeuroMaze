@@ -115,6 +115,14 @@ function makeMove(direction) {
   drawMazeView();
 }
 
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') {
+      makeMove('L');
+    } else if (e.key === 'ArrowRight') {
+      makeMove('R');
+    }
+  });  
+
 function onMazeComplete() {
   alert("Maze completed in " + moves + " moves!");
   logToCSV(userEmail, emailHash, moves, mazePath);
