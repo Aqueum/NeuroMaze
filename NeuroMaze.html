@@ -225,11 +225,15 @@ function logToCSV(email, hash, moves, path) {
   const record = [new Date().toISOString(), hash, moves, path.join('')].join(',');
   console.log("Log line for CSV:", record);
   // If backend is set up:
-  // fetch('http://localhost:8000/append_to_csv', {
-  //   method:'POST',
-  //   headers:{'Content-Type':'application/json'},
-  //   body:JSON.stringify({line:record})
-  // }).then(res=>res.json()).then(console.log).catch(console.error);
+  fetch('http://localhost:8000/append_to_csv', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({line:record})
+  })
+  .then(res=>res.json())
+  .then(console.log)
+  .catch(console.error);
+  
 }
 
 window.addEventListener('resize', () => {
