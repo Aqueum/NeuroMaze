@@ -1,123 +1,86 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NeuroMaze Game</title>
-    <style>
-        body {
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f4f4f4;
-        }
-        canvas {
-            border: 1px solid #000;
-        }
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NeuroMaze</title>
+<style>
+  body { margin:0; background:#000; color:#fff; font-family:Arial, sans-serif; }
+  #gameContainer { position:relative; width:100%; height:80vh; background:#333; display:flex; align-items:center; justify-content:center; }
+  #uiOverlay { position:absolute; top:10px; left:10px; z-index:999; background:rgba(0,0,0,0.5); padding:10px; }
+  #directionButtons { position:absolute; bottom:10px; width:100%; display:flex; justify-content:center; }
+  .arrowBtn { margin:0 20px; padding:10px; background:#444; color:#fff; border:none; cursor:pointer; font-size:1.2em; }
+  #startScreen { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px; }
+  #mazeView { width:100%; height:100%; background:#222; }
+</style>
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
-    <script>
-// Canvas Game: First Person Maze
 
-// Initialize canvas and game variables
-const canvas = document.getElementById('gameCanvas');
+<div id="gameContainer">
+  <canvas id="mazeView"></canvas>
+  <div id="startScreen">
+    <h1>Win a £25 Amazon Gift Card!</h1>
+    <p>The first person to complete the maze without cheating in as few moves as possible will win.</p>
+    <p>Please enter your email address to enter the prize draw. We will use it to verify no cheating and send the gift card. We will delete all non-winning emails after awarding the prize.</p>
+    <p><input type="email" id="emailInput" placeholder="Enter email" style="width:200px;" /></p>
+    <p><label><input type="checkbox" id="saveCookie" /> Save email in a cookie</label></p>
+    <button id="startButton">Start Game</button>
+  </div>
+  <div id="uiOverlay">
+    <div>Moves: <span id="movesCount">0</span></div>
+  </div>
+  <div id="directionButtons">
+    <button class="arrowBtn" id="leftBtn">← Left</button>
+    <button class="arrowBtn" id="rightBtn">Right →</button>
+  </div>
+</div>
+
+<script>
+// Pseudo-3D maze representation
+const canvas = document.getElementById('mazeView');
 const ctx = canvas.getContext('2d');
-canvas.width = 800;
-canvas.height = 600;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight * 0.8;
 
-let currentPosition = 0;
-let mazeLog = [];
-const maze = [ // Example maze structure
-  { left: 1, right: 2 }, // Node 0
-  { left: 3, right: 4 }, // Node 1
-  { left: 5, right: 6 }, // Node 2
-  { left: null, right: null }, // Node 3 (dead end)
-  { left: null, right: null }, // Node 4 (dead end)
-  { left: null, right: null }, // Node 5 (dead end)
-  { left: null, right: null }  // Node 6 (dead end)
-];
+let emailHash = '';
+let userEmail = '';
+let moves = 0;
+let mazePath = []; // store turns: "L" or "R"
+let mazeCompleted = false;
+let minimalMoves = 10; // Hypothetical minimal moves to solve
 
-// Draw game scene
-function drawScene() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Visual elements for the maze
-  ctx.fillStyle = "#000";
-  ctx.font = "24px Arial";
-  ctx.textAlign = "center";
-
-  ctx.fillText("You are at position " + currentPosition, canvas.width / 2, canvas.height / 2 - 50);
-  ctx.fillText("Press Left or Right to choose a path", canvas.width / 2, canvas.height / 2);
-
-  ctx.fillStyle = "#007BFF";
-  ctx.fillRect(canvas.width / 2 - 150, canvas.height / 2 + 50, 100, 50);
-  ctx.fillRect(canvas.width / 2 + 50, canvas.height / 2 + 50, 100, 50);
-
-  ctx.fillStyle = "#FFF";
-  ctx.fillText("Left", canvas.width / 2 - 100, canvas.height / 2 + 85);
-  ctx.fillText("Right", canvas.width / 2 + 100, canvas.height / 2 + 85);
-}
-
-// Handle user input
-function handleKeyDown(event) {
-  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-    const choice = event.key === "ArrowLeft" ? "left" : "right";
-    mazeLog.push(choice);
-
-    const nextPosition = maze[currentPosition][choice];
-    if (nextPosition === null) {
-      alert("Dead end! Game over.");
-      logDecisions();
-      resetGame();
-    } else {
-      currentPosition = nextPosition;
-      drawScene();
-    }
+// On load, check cookie
+window.addEventListener('load', () => {
+  const savedEmail = document.cookie.replace(/(?:(?:^|.*;\s*)mazeEmail\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+  if (savedEmail) {
+    document.getElementById('emailInput').value = savedEmail;
+    document.getElementById('saveCookie').checked = true;
   }
+});
+
+// Basic maze drawing (placeholder)
+function drawMazeView() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = '#555';
+  ctx.fillRect(canvas.width/2 - 50, canvas.height/2 - 50, 100, 100); 
 }
 
-// Log decisions to CSV
-function logDecisions() {
-  const csvContent = mazeLog.map((direction, index) => `${index + 1},${direction}`).join("\n");
-  const fileName = "maze_log.csv";
+// Simple SHA-256 hash for email
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
+}
 
-  // Check if the file exists and append or create
-  let existingContent = localStorage.getItem("maze_log_data");
-  if (existingContent) {
-    existingContent += "\n" + csvContent;
-  } else {
-    existingContent = "Turn,Direction\n" + csvContent;
+// Start button handler
+document.getElementById('startButton').addEventListener('click', async () => {
+  userEmail = document.getElementById('emailInput').value.trim().toLowerCase();
+  if (!userEmail) {
+    alert("Please enter an email address.");
+    return;
   }
 
-  // Save the content back to localStorage
-  localStorage.setItem("maze_log_data", existingContent);
-
-  // Trigger download for updated file
-  const blob = new Blob([existingContent], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", fileName);
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-
-// Reset the game
-function resetGame() {
-  currentPosition = 0;
-  mazeLog = [];
-  drawScene();
-}
-
-// Start the game
-window.addEventListener("keydown", handleKeyDown);
-drawScene();
-    </script>
-</body>
-</html>
+  if (document.getElementById('saveCookie').checked) {
+    document.cookie = "mazeEmail=" + encodeURIComponent(userEmail) + "; path=/; max-age=31
