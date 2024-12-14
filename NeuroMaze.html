@@ -85,33 +85,27 @@ function logDecisions() {
   const csvContent = mazeLog.map((direction, index) => `${index + 1},${direction}`).join("\n");
   const fileName = "maze_log.csv";
 
-  if (window.showSaveFilePicker) {
-    // Use File System Access API if supported
-    window.showSaveFilePicker({
-      suggestedName: fileName,
-      types: [
-        {
-          description: "CSV Files",
-          accept: { "text/csv": [".csv"] }
-        }
-      ]
-    }).then(async (fileHandle) => {
-      const writable = await fileHandle.createWritable();
-      await writable.write(new Blob(["Turn,Direction\n" + csvContent], { type: "text/csv;charset=utf-8;" }));
-      await writable.close();
-    }).catch(console.error);
+  // Check if the file exists and append or create
+  let existingContent = localStorage.getItem("maze_log_data");
+  if (existingContent) {
+    existingContent += "\n" + csvContent;
   } else {
-    // Fallback to downloading file
-    const blob = new Blob(["Turn,Direction\n" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", fileName);
-    link.style.display = "none";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    existingContent = "Turn,Direction\n" + csvContent;
   }
+
+  // Save the content back to localStorage
+  localStorage.setItem("maze_log_data", existingContent);
+
+  // Trigger download for updated file
+  const blob = new Blob([existingContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", fileName);
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 // Reset the game
