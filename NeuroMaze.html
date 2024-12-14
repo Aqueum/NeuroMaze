@@ -178,6 +178,7 @@ function makeMove(direction) {
 function handleDeath() {
   hasDied = true;
   drawMazeView(); // Update the image first
+  logToCSV(userEmail, emailHash, moves, mazePath);
   setTimeout(() => {
     alert("You reached a dead-end and died. Press any key to try again.");
   }, 50); // Give a small delay to let the image render before the alert
