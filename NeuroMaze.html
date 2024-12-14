@@ -83,4 +83,67 @@ document.getElementById('startButton').addEventListener('click', async () => {
   }
 
   if (document.getElementById('saveCookie').checked) {
-    document.cookie = "mazeEmail=" + encodeURIComponent(userEmail) + "; path=/; max-age=31
+    document.cookie = "mazeEmail=" + encodeURIComponent(userEmail) + "; path=/; max-age=31536000";
+  }
+
+  emailHash = await sha256(userEmail);
+  document.getElementById('startScreen').style.display = 'none';
+  drawMazeView();
+});
+
+// Direction buttons
+document.getElementById('leftBtn').addEventListener('click', () => makeMove('L'));
+document.getElementById('rightBtn').addEventListener('click', () => makeMove('R'));
+
+function makeMove(direction) {
+  if (mazeCompleted) return;
+  moves++;
+  mazePath.push(direction);
+  document.getElementById('movesCount').textContent = moves;
+
+  // Maze completion logic (placeholder)
+  if (moves >= minimalMoves && moves < minimalMoves + 5) { 
+    mazeCompleted = true;
+    onMazeComplete();
+  }
+  drawMazeView();
+}
+
+function onMazeComplete() {
+  alert("Maze completed in " + moves + " moves!");
+  // Log result
+  logToCSV(userEmail, emailHash, moves, mazePath);
+
+  // If fewest moves, notify admin
+  if (moves === minimalMoves) {
+    console.log("Notify admin: Completed with minimal moves:", userEmail, emailHash);
+    // Add your local email notification logic here if needed
+  }
+}
+
+function logToCSV(email, hash, moves, path) {
+  const record = [new Date().toISOString(), hash, moves, path.join('')].join(',');
+  console.log("Log line for CSV (copy this and append to maze_log.csv):", record);
+  // For automated append, you'd need a server:
+  fetch('http://localhost:8000/append_to_csv', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({line: record})
+  })
+  .then(res=>res.json())
+  .then(data=>console.log("Saved:", data))
+  .catch(err=>console.error(err));
+  
+}
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight * 0.8;
+  drawMazeView();
+});
+
+drawMazeView();
+</script>
+
+</body>
+</html>
