@@ -177,9 +177,12 @@ function makeMove(direction) {
 
 function handleDeath() {
   hasDied = true;
-  drawMazeView();
-  alert("You reached a dead-end and died. Press any key to try again.");
+  drawMazeView(); // Update the image first
+  setTimeout(() => {
+    alert("You reached a dead-end and died. Press any key to try again.");
+  }, 50); // Give a small delay to let the image render before the alert
 }
+
 
 function restartGame() {
   // Reset state
