@@ -11,13 +11,16 @@
   #directionButtons { position:absolute; bottom:10px; width:100%; display:flex; justify-content:center; }
   .arrowBtn { margin:0 20px; padding:10px; background:#444; color:#fff; border:none; cursor:pointer; font-size:1.2em; }
   #startScreen { position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px; }
-  #mazeView { width:100%; height:100%; background:#222; }
+  #mazeView { width:100%; height:100%; background:#222; display:flex; align-items:center; justify-content:center; }
+  #mazeImg { max-width:80%; max-height:80%; }
 </style>
 </head>
 <body>
 
 <div id="gameContainer">
-  <canvas id="mazeView"></canvas>
+  <div id="mazeView">
+    <img id="mazeImg" src="" alt="Maze View"/>
+  </div>
   <div id="startScreen">
     <h1>Win a £25 Amazon Gift Card!</h1>
     <p>The first person to complete the maze without cheating in as few moves as possible will win.</p>
@@ -35,20 +38,47 @@
   </div>
 </div>
 
+<!-- Base64-encoded maze definition (JSON):
+{
+  "0":{"type":"LR","L":1,"R":2},
+  "1":{"type":"L","L":3},
+  "2":{"type":"R","R":4},
+  "3":{"type":"LR","L":5,"R":6},
+  "4":{"type":"dead"},
+  "5":{"type":"LR","L":7,"R":8},
+  "6":{"type":"L","L":9},
+  "7":{"type":"L","L":10},
+  "8":{"type":"dead"},
+  "9":{"type":"prize"},
+  "10":{"type":"dead"}
+}
+-->
 <script>
-const canvas = document.getElementById('mazeView');
-const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight * 0.8;
+const mazeDataBase64 = "eyAiMCI6eyJ0eXBlIjoiTFIiLCJMIjoxLCJSIjoyfSwgIjEiOnsidHlwZSI6IkwiLCJMIjozfSwgIjIiOnsidHlwZSI6IlIiLCJSIjo0fSwgIjMiOnsidHlwZSI6IkxSIiwiTCI6NSwiUiI6Nn0sICI0Ijp7InR5cGUiOiJkZWFkIn0sICI1Ijp7InR5cGUiOiJMUiIsIkwiOjcsIlIiOjh9LCAiNiI6eyJ0eXBlIjoiTCIsIkwiOjl9LCAiNyI6eyJ0eXBlIjoiTCIsIkwiOjEwfSwgIjgiOnsidHlwZSI6ImRlYWQifSwgIjkiOnsidHlwZSI6InByaXplIn0sICIxMCI6eyJ0eXBlIjoiZGVhZCJ9IH0=";
 
+let mazeNodes = {};
 let emailHash = '';
 let userEmail = '';
 let moves = 0;
-let mazePath = []; // store turns: "L" or "R"
+let mazePath = [];
 let mazeCompleted = false;
+let currentNode = "0";
+let minimalMoves = 99999; // Adjust if needed
+let hasDied = false;
 
-// For demo purposes, let's say the maze completes after 20 moves:
-let minimalMoves = 20;
+// Decode and parse the maze data
+function decodeMazeData() {
+  const jsonStr = atob(mazeDataBase64);
+  mazeNodes = JSON.parse(jsonStr);
+}
+
+// Simple SHA-256 hash
+async function sha256(message) {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
+}
 
 window.addEventListener('load', () => {
   const savedEmailEncoded = document.cookie.replace(/(?:(?:^|.*;\s*)mazeEmail\s*\=\s*([^;]*).*$)|^.*$/, "$1");
@@ -58,22 +88,6 @@ window.addEventListener('load', () => {
     document.getElementById('saveCookie').checked = true;
   }
 });
-
-function drawMazeView() {
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle = '#555';
-  ctx.fillRect(canvas.width/2 - 50, canvas.height/2 - 50, 100, 100); 
-  // Placeholder "wall" view
-}
-
-// Simple SHA-256 hash for email (deterministic)
-async function sha256(message) {
-  const msgBuffer = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
-}
 
 document.getElementById('startButton').addEventListener('click', async () => {
   userEmail = document.getElementById('emailInput').value.trim().toLowerCase();
@@ -85,51 +99,125 @@ document.getElementById('startButton').addEventListener('click', async () => {
   if (document.getElementById('saveCookie').checked) {
     document.cookie = "mazeEmail=" + encodeURIComponent(userEmail) + "; path=/; max-age=31536000";
   } else {
-    // If unchecked, clear any existing cookie
     document.cookie = "mazeEmail=; path=/; max-age=0";
   }
 
   emailHash = await sha256(userEmail);
-  // For debugging, console.log(userEmail, emailHash) to verify stable hash
   console.log("Email:", userEmail, "Hash:", emailHash);
 
   document.getElementById('startScreen').style.display = 'none';
+  decodeMazeData();
   drawMazeView();
 });
 
 document.getElementById('leftBtn').addEventListener('click', () => makeMove('L'));
 document.getElementById('rightBtn').addEventListener('click', () => makeMove('R'));
 
-function makeMove(direction) {
+document.addEventListener('keydown', (e) => {
   if (mazeCompleted) return;
+  if (hasDied) {
+    // On any key after death, restart
+    restartGame();
+    return;
+  }
+  if (e.key === 'ArrowLeft') makeMove('L');
+  else if (e.key === 'ArrowRight') makeMove('R');
+});
+
+function makeMove(direction) {
+  if (mazeCompleted || hasDied) return;
+
+  const node = mazeNodes[currentNode];
+  if (!node) {
+    // Invalid node, treat as dead
+    handleDeath();
+    return;
+  }
+
   moves++;
   mazePath.push(direction);
   document.getElementById('movesCount').textContent = moves;
-  
-  // Maze completion logic: once moves == minimalMoves, complete
-  if (moves === minimalMoves) {
-    mazeCompleted = true;
-    onMazeComplete();
+
+  // Check if direction possible
+  let nextNode = null;
+  if (direction === 'L' && node.L !== undefined) nextNode = node.L.toString();
+  if (direction === 'R' && node.R !== undefined) nextNode = node.R.toString();
+
+  if (!nextNode) {
+    // No path in this direction -> death
+    handleDeath();
+    return;
   }
 
+  currentNode = nextNode;
+  const nextNodeObj = mazeNodes[currentNode];
+
+  if (!nextNodeObj) {
+    // If no node data, treat as death
+    handleDeath();
+    return;
+  }
+
+  if (nextNodeObj.type === 'dead') {
+    handleDeath();
+  } else if (nextNodeObj.type === 'prize') {
+    // Reached prize
+    mazeCompleted = true;
+    drawMazeView();
+    alert("You found the prize in " + moves + " moves!");
+    logToCSV(userEmail, emailHash, moves, mazePath);
+    if (moves < minimalMoves) {
+      console.log("Email admin: Completed with minimal moves:", userEmail, emailHash);
+    }
+  } else {
+    // Continue the maze
+    drawMazeView();
+  }
+}
+
+function handleDeath() {
+  hasDied = true;
+  drawMazeView();
+  alert("You reached a dead-end and died. Press any key to try again.");
+}
+
+function restartGame() {
+  // Reset state
+  moves = 0;
+  mazePath = [];
+  mazeCompleted = false;
+  hasDied = false;
+  currentNode = "0";
+  document.getElementById('movesCount').textContent = '0';
   drawMazeView();
 }
 
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowLeft') {
-      makeMove('L');
-    } else if (e.key === 'ArrowRight') {
-      makeMove('R');
-    }
-  });  
-
-function onMazeComplete() {
-  alert("Maze completed in " + moves + " moves!");
-  logToCSV(userEmail, emailHash, moves, mazePath);
-  if (moves === minimalMoves) {
-    // Minimal moves scenario: send email to admin
-    console.log("Email admin: Completed with minimal moves:", userEmail, emailHash);
-    // Here you'd implement fetch() to your backend email notification if desired
+function drawMazeView() {
+  const node = mazeNodes[currentNode];
+  const img = document.getElementById('mazeImg');
+  if (!node) {
+    // If no node data, show dead
+    img.src = 'dead.webp';
+    return;
+  }
+  switch(node.type) {
+    case 'LR':
+      img.src = 'LR.webp';
+      break;
+    case 'L':
+      img.src = 'L.webp';
+      break;
+    case 'R':
+      img.src = 'R.webp';
+      break;
+    case 'dead':
+      img.src = 'dead.webp';
+      break;
+    case 'prize':
+      img.src = 'prize.webp';
+      break;
+    default:
+      img.src = 'dead.webp';
   }
 }
 
@@ -145,12 +233,8 @@ function logToCSV(email, hash, moves, path) {
 }
 
 window.addEventListener('resize', () => {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight * 0.8;
-  drawMazeView();
+  // No complex resizing needed since it's just images
 });
-
-drawMazeView();
 </script>
 
 </body>
