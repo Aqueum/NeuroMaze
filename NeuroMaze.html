@@ -36,7 +36,6 @@
 </div>
 
 <script>
-// Pseudo-3D maze representation
 const canvas = document.getElementById('mazeView');
 const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
@@ -47,26 +46,28 @@ let userEmail = '';
 let moves = 0;
 let mazePath = []; // store turns: "L" or "R"
 let mazeCompleted = false;
-let minimalMoves = 10; // Hypothetical minimal moves to solve
 
-// On load, check cookie
+// For demo purposes, let's say the maze completes after 20 moves:
+let minimalMoves = 20;
+
 window.addEventListener('load', () => {
-  const savedEmail = document.cookie.replace(/(?:(?:^|.*;\s*)mazeEmail\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-  if (savedEmail) {
-    document.getElementById('emailInput').value = savedEmail;
+  const savedEmailEncoded = document.cookie.replace(/(?:(?:^|.*;\s*)mazeEmail\s*\=\s*([^;]*).*$)|^.*$/, "$1");
+  if (savedEmailEncoded) {
+    const decodedEmail = decodeURIComponent(savedEmailEncoded);
+    document.getElementById('emailInput').value = decodedEmail;
     document.getElementById('saveCookie').checked = true;
   }
 });
 
-// Basic maze drawing (placeholder)
 function drawMazeView() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle = '#555';
   ctx.fillRect(canvas.width/2 - 50, canvas.height/2 - 50, 100, 100); 
+  // Placeholder "wall" view
 }
 
-// Simple SHA-256 hash for email
+// Simple SHA-256 hash for email (deterministic)
 async function sha256(message) {
   const msgBuffer = new TextEncoder().encode(message);
   const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
@@ -74,7 +75,6 @@ async function sha256(message) {
   return hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-// Start button handler
 document.getElementById('startButton').addEventListener('click', async () => {
   userEmail = document.getElementById('emailInput').value.trim().toLowerCase();
   if (!userEmail) {
@@ -84,14 +84,19 @@ document.getElementById('startButton').addEventListener('click', async () => {
 
   if (document.getElementById('saveCookie').checked) {
     document.cookie = "mazeEmail=" + encodeURIComponent(userEmail) + "; path=/; max-age=31536000";
+  } else {
+    // If unchecked, clear any existing cookie
+    document.cookie = "mazeEmail=; path=/; max-age=0";
   }
 
   emailHash = await sha256(userEmail);
+  // For debugging, console.log(userEmail, emailHash) to verify stable hash
+  console.log("Email:", userEmail, "Hash:", emailHash);
+
   document.getElementById('startScreen').style.display = 'none';
   drawMazeView();
 });
 
-// Direction buttons
 document.getElementById('leftBtn').addEventListener('click', () => makeMove('L'));
 document.getElementById('rightBtn').addEventListener('click', () => makeMove('R'));
 
@@ -100,40 +105,35 @@ function makeMove(direction) {
   moves++;
   mazePath.push(direction);
   document.getElementById('movesCount').textContent = moves;
-
-  // Maze completion logic (placeholder)
-  if (moves >= minimalMoves && moves < minimalMoves + 5) { 
+  
+  // Maze completion logic: once moves == minimalMoves, complete
+  if (moves === minimalMoves) {
     mazeCompleted = true;
     onMazeComplete();
   }
+
   drawMazeView();
 }
 
 function onMazeComplete() {
   alert("Maze completed in " + moves + " moves!");
-  // Log result
   logToCSV(userEmail, emailHash, moves, mazePath);
-
-  // If fewest moves, notify admin
   if (moves === minimalMoves) {
-    console.log("Notify admin: Completed with minimal moves:", userEmail, emailHash);
-    // Add your local email notification logic here if needed
+    // Minimal moves scenario: send email to admin
+    console.log("Email admin: Completed with minimal moves:", userEmail, emailHash);
+    // Here you'd implement fetch() to your backend email notification if desired
   }
 }
 
 function logToCSV(email, hash, moves, path) {
   const record = [new Date().toISOString(), hash, moves, path.join('')].join(',');
-  console.log("Log line for CSV (copy this and append to maze_log.csv):", record);
-  // For automated append, you'd need a server:
-  fetch('http://localhost:8000/append_to_csv', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({line: record})
-  })
-  .then(res=>res.json())
-  .then(data=>console.log("Saved:", data))
-  .catch(err=>console.error(err));
-  
+  console.log("Log line for CSV:", record);
+  // If backend is set up:
+  // fetch('http://localhost:8000/append_to_csv', {
+  //   method:'POST',
+  //   headers:{'Content-Type':'application/json'},
+  //   body:JSON.stringify({line:record})
+  // }).then(res=>res.json()).then(console.log).catch(console.error);
 }
 
 window.addEventListener('resize', () => {
