@@ -83,38 +83,35 @@ function handleKeyDown(event) {
 // Log decisions to CSV
 function logDecisions() {
   const csvContent = mazeLog.map((direction, index) => `${index + 1},${direction}`).join("\n");
-  const fileName = "NeuroMaze/maze_log.csv";
+  const fileName = "maze_log.csv";
 
-  fetch(fileName)
-    .then((response) => {
-      if (response.ok) {
-        // File exists, append to it
-        return response.text();
-      } else {
-        throw new Error("File does not exist");
-      }
-    })
-    .then((existingContent) => {
-      const updatedContent = existingContent + "\n" + csvContent;
-      const blob = new Blob([updatedContent], { type: "text/csv;charset=utf-8;" });
-      downloadFile(blob, fileName);
-    })
-    .catch(() => {
-      // File does not exist, create it
-      const blob = new Blob(["Turn,Direction\n" + csvContent], { type: "text/csv;charset=utf-8;" });
-      downloadFile(blob, fileName);
-    });
-}
-
-function downloadFile(blob, fileName) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.setAttribute("href", url);
-  link.setAttribute("download", fileName);
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  if (window.showSaveFilePicker) {
+    // Use File System Access API if supported
+    window.showSaveFilePicker({
+      suggestedName: fileName,
+      types: [
+        {
+          description: "CSV Files",
+          accept: { "text/csv": [".csv"] }
+        }
+      ]
+    }).then(async (fileHandle) => {
+      const writable = await fileHandle.createWritable();
+      await writable.write(new Blob(["Turn,Direction\n" + csvContent], { type: "text/csv;charset=utf-8;" }));
+      await writable.close();
+    }).catch(console.error);
+  } else {
+    // Fallback to downloading file
+    const blob = new Blob(["Turn,Direction\n" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName);
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 }
 
 // Reset the game
